@@ -1,0 +1,97 @@
+{
+  "taal": "en",
+  "naam": "English",
+  "dir": "ltr",
+  "lizz": {
+    "naamLabel": "Lizz",
+    "begroeting": "Hi {naam}! It's great to see you. 💛",
+    "intro": "I'm Lizz, your guide for a short mental well-being check-in. We'll go through a few questions about how you've been feeling over the last 7 days — it only takes a couple of minutes.",
+    "toestemming": "This is a demonstration with fictitious data. This is not medical advice.",
+    "startKnop": "Let's get started",
+    "tussenzinnen": [
+      "Thank you for sharing that. 🌿",
+      "Good to know — let's continue.",
+      "I hear you. Just one more question."
+    ],
+    "denkt": "Lizz is typing…",
+    "vorige": "Previous",
+    "volgende": "Next",
+    "bekijkUitkomst": "View outcome",
+    "voortgang": "Question {huidig} of {totaal}",
+    "opnieuw": "Start again",
+    "naarDashboard": "Go to dashboard",
+    "afsluiting": "Thank you for your openness. Remember: you don't have to do this alone. 💛",
+    "nietBegrepen": "I didn't quite catch that. Please tap one of the options above.",
+    "onbekendToken": "We couldn't find your profile. Choose a demo profile to continue.",
+    "invoerPlaceholder": "Type here…",
+    "verzend": "Send",
+    "klassiekToggle": "Classic version"
+  },
+  "vragen": {
+    "stemming": {
+      "tekst": "How have you been feeling in general over the last week?",
+      "opties": {
+        "1": "Good / balanced",
+        "2": "OK, with some harder moments",
+        "3": "Often down or anxious",
+        "4": "Not well most of the time"
+      }
+    },
+    "genieten": {
+      "tekst": "Are you able to enjoy small things or take a moment to relax?",
+      "opties": {
+        "1": "Yes, mostly",
+        "2": "Sometimes, but less than usual",
+        "3": "Not very often",
+        "4": "Hardly at all"
+      }
+    },
+    "ondersteuning": {
+      "tekst": "Do you feel you need extra support or tips to feel better?",
+      "opties": {
+        "1": "No, things are fine as they are",
+        "2": "Maybe some inspiration or information",
+        "3": "Yes, I could use help with self-care",
+        "4": "Yes, I'm looking for more targeted support"
+      }
+    }
+  },
+  "uitkomsten": {
+    "1": {
+      "titel": "You're doing well",
+      "advies": "Keep doing what works 😊",
+      "lizzBoodschap": "That's wonderful to hear! It sounds like you're taking good care of yourself. Keep doing what works for you. 😊"
+    },
+    "2": {
+      "titel": "Some information or inspiration might help",
+      "advies": "Think articles, podcasts or practical tips.",
+      "lizzBoodschap": "I understand — sometimes a little extra inspiration or information can go a long way. An article or podcast might be just what you need. 💛"
+    },
+    "3": {
+      "titel": "Digital self-care suits you",
+      "advies": "For example apps, exercises (breathing, rest moments) or online guidance.",
+      "lizzBoodschap": "It sounds like you could use a bit more support, and that's completely okay. Apps, breathing exercises or online guidance can really help. You don't have to do this alone."
+    },
+    "4": {
+      "titel": "More support is available",
+      "advies": "Consider speaking with a professional (GP or coach).",
+      "lizzBoodschap": "I hear you, and I'd like to encourage you to reach out to someone who can really help. A conversation with your GP or a coach can make a big difference. You are not alone. 💛"
+    }
+  },
+  "vangnet": "If you feel acutely unsafe or are having thoughts of harming yourself, please contact your GP or out-of-hours doctor service immediately. In an emergency: call 112 (Netherlands emergency number).",
+  "dashboard": {
+    "titel": "Dashboard",
+    "leeg": "No check-ins recorded yet.",
+    "naam": "Name",
+    "moment": "Moment",
+    "niveau": "Level",
+    "signaal": "Signal",
+    "tijdstip": "Time"
+  },
+  "momenten": {
+    "inschrijving": "At registration",
+    "6_maanden": "6 months",
+    "12_maanden": "12 months"
+  },
+  "taalKiezer": "Choose language"
+}

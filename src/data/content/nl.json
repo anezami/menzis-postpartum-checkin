@@ -1,0 +1,97 @@
+{
+  "taal": "nl",
+  "naam": "Nederlands",
+  "dir": "ltr",
+  "lizz": {
+    "naamLabel": "Lizz",
+    "begroeting": "Hoi {naam}! Fijn dat je er bent. 💛",
+    "intro": "Ik ben Lizz, jouw gids voor een korte mentale check-in. We bespreken samen hoe het de afgelopen 7 dagen met je ging — het duurt maar een paar minuutjes.",
+    "toestemming": "Dit is een demonstratie met fictieve gegevens. Dit is geen medisch advies.",
+    "startKnop": "Laten we beginnen",
+    "tussenzinnen": [
+      "Bedankt dat je dat deelt. 🌿",
+      "Goed om te weten, we gaan verder.",
+      "Ik hoor je. Nog één vraagje."
+    ],
+    "denkt": "Lizz is aan het typen…",
+    "vorige": "Vorige",
+    "volgende": "Volgende",
+    "bekijkUitkomst": "Bekijk uitkomst",
+    "voortgang": "Vraag {huidig} van {totaal}",
+    "opnieuw": "Opnieuw beginnen",
+    "naarDashboard": "Naar dashboard",
+    "afsluiting": "Dank je wel voor je openheid. Vergeet niet: je hoeft dit niet alleen te doen. 💛",
+    "nietBegrepen": "Ik begreep dat niet helemaal. Tik een van de opties hierboven aan.",
+    "onbekendToken": "We konden jouw profiel niet vinden. Kies een demo-profiel om verder te gaan.",
+    "invoerPlaceholder": "Typ hier…",
+    "verzend": "Verstuur",
+    "klassiekToggle": "Klassieke versie"
+  },
+  "vragen": {
+    "stemming": {
+      "tekst": "Hoe voel je je de laatste week over het algemeen?",
+      "opties": {
+        "1": "Goed / in balans",
+        "2": "Oké, met wat mindere momenten",
+        "3": "Regelmatig somber of gespannen",
+        "4": "Vaak niet zo goed"
+      }
+    },
+    "genieten": {
+      "tekst": "Lukt het je om van kleine dingen te genieten of even te ontspannen?",
+      "opties": {
+        "1": "Ja, meestal wel",
+        "2": "Soms, maar minder dan normaal",
+        "3": "Niet zo vaak",
+        "4": "Nauwelijks"
+      }
+    },
+    "ondersteuning": {
+      "tekst": "Heb je behoefte aan extra ondersteuning of tips om je beter te voelen?",
+      "opties": {
+        "1": "Nee, het gaat goed zo",
+        "2": "Misschien wat inspiratie of informatie",
+        "3": "Ja, ik kan wel hulp bij zelfzorg gebruiken",
+        "4": "Ja, ik zoek meer gerichte ondersteuning"
+      }
+    }
+  },
+  "uitkomsten": {
+    "1": {
+      "titel": "Het gaat goed",
+      "advies": "Blijf doen wat werkt 😊",
+      "lizzBoodschap": "Wat fijn om te horen! Het klinkt alsof je goed voor jezelf zorgt. Blijf doen wat voor jou werkt. 😊"
+    },
+    "2": {
+      "titel": "Behoefte aan info of inspiratie",
+      "advies": "Denk aan artikelen, podcasts of praktische tips.",
+      "lizzBoodschap": "Ik begrijp het — er zijn momenten dat wat extra inspiratie of informatie fijn kan zijn. Misschien helpen een goed artikel of een podcast je verder. 💛"
+    },
+    "3": {
+      "titel": "Digitale zelfzorg past bij jou",
+      "advies": "Bijvoorbeeld apps, oefeningen (ademhaling, rustmomenten) of online begeleiding.",
+      "lizzBoodschap": "Het klinkt alsof je wat meer steun kunt gebruiken, en dat is helemaal oké. Apps, ademhalingsoefeningen of online begeleiding kunnen echt helpen. Je hoeft dit niet alleen te doen."
+    },
+    "4": {
+      "titel": "Meer ondersteuning gewenst",
+      "advies": "Overweeg een gesprek met een professional (huisarts of coach).",
+      "lizzBoodschap": "Ik hoor je, en ik wil je aanmoedigen om contact op te nemen met iemand die je echt kan helpen. Een gesprek met je huisarts of een coach kan een groot verschil maken. Je bent niet alleen. 💛"
+    }
+  },
+  "vangnet": "Voel je je acuut niet veilig of heb je gedachten om jezelf te schaden? Neem dan direct contact op met je huisarts of huisartsenpost. Bij spoed: bel 112.",
+  "dashboard": {
+    "titel": "Dashboard",
+    "leeg": "Nog geen check-ins geregistreerd.",
+    "naam": "Naam",
+    "moment": "Moment",
+    "niveau": "Niveau",
+    "signaal": "Signaal",
+    "tijdstip": "Tijdstip"
+  },
+  "momenten": {
+    "inschrijving": "Bij inschrijving",
+    "6_maanden": "6 maanden",
+    "12_maanden": "12 maanden"
+  },
+  "taalKiezer": "Taal kiezen"
+}

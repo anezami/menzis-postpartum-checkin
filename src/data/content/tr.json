@@ -1,0 +1,97 @@
+{
+  "taal": "tr",
+  "naam": "Türkçe",
+  "dir": "ltr",
+  "lizz": {
+    "naamLabel": "Lizz",
+    "begroeting": "Merhaba {naam}! Seninle olmak çok güzel. 💛",
+    "intro": "Ben Lizz, kısa bir zihinsel iyilik hali kontrolü için rehberinizim. Son 7 gün içinde nasıl hissettiğinizi birkaç soruyla konuşacağız — yalnızca birkaç dakika sürer.",
+    "toestemming": "Bu, hayali verilerle yapılan bir gösterimdir. Bu tıbbi tavsiye değildir.",
+    "startKnop": "Başlayalım",
+    "tussenzinnen": [
+      "Bunu paylaştığın için teşekkürler. 🌿",
+      "Bilmek güzel, devam edelim.",
+      "Seni duyuyorum. Sadece bir soru daha."
+    ],
+    "denkt": "Lizz yazıyor…",
+    "vorige": "Önceki",
+    "volgende": "Sonraki",
+    "bekijkUitkomst": "Sonucu gör",
+    "voortgang": "Soru {huidig} / {totaal}",
+    "opnieuw": "Yeniden başla",
+    "naarDashboard": "Panoya git",
+    "afsluiting": "Açıklığın için teşekkürler. Unutma: bunu yalnız yapmak zorunda değilsin. 💛",
+    "nietBegrepen": "Bunu tam anlayamadım. Lütfen yukarıdaki seçeneklerden birini seçin.",
+    "onbekendToken": "Profilinizi bulamadık. Devam etmek için bir demo profili seçin.",
+    "invoerPlaceholder": "Buraya yazın…",
+    "verzend": "Gönder",
+    "klassiekToggle": "Klasik sürüm"
+  },
+  "vragen": {
+    "stemming": {
+      "tekst": "Geçen hafta genel olarak nasıl hissettiniz?",
+      "opties": {
+        "1": "İyi / dengeli",
+        "2": "İdare eder, zor anlar da oldu",
+        "3": "Sık sık mutsuz veya gergin",
+        "4": "Çoğunlukla iyi değil"
+      }
+    },
+    "genieten": {
+      "tekst": "Küçük şeylerden zevk alabilir veya dinlenebilir misiniz?",
+      "opties": {
+        "1": "Evet, çoğunlukla",
+        "2": "Bazen, ama normalden daha az",
+        "3": "Pek sık değil",
+        "4": "Neredeyse hiç"
+      }
+    },
+    "ondersteuning": {
+      "tekst": "Kendinizi daha iyi hissetmek için ekstra destek veya ipuçlarına ihtiyacınız var mı?",
+      "opties": {
+        "1": "Hayır, her şey yolunda",
+        "2": "Belki biraz ilham veya bilgi",
+        "3": "Evet, öz-bakımda yardıma ihtiyacım var",
+        "4": "Evet, daha hedefli destek arıyorum"
+      }
+    }
+  },
+  "uitkomsten": {
+    "1": {
+      "titel": "Harika gidiyorsunuz",
+      "advies": "İşe yarayan şeyleri yapmaya devam edin 😊",
+      "lizzBoodschap": "Bunu duymak çok güzel! Kendinize çok iyi bakıyorsunuz gibi görünüyor. İşe yarayan şeyleri yapmaya devam edin. 😊"
+    },
+    "2": {
+      "titel": "Biraz ilham veya bilgi yardımcı olabilir",
+      "advies": "Makaleler, podcast'ler veya pratik ipuçları düşünün.",
+      "lizzBoodschap": "Anlıyorum — bazen biraz ekstra ilham veya bilgi çok yardımcı olabilir. Bir makale ya da podcast tam istediğiniz şey olabilir. 💛"
+    },
+    "3": {
+      "titel": "Dijital öz-bakım size uygun",
+      "advies": "Örneğin uygulamalar, egzersizler (nefes, dinlenme anları) veya çevrimiçi rehberlik.",
+      "lizzBoodschap": "Biraz daha desteğe ihtiyaç duyabilirsiniz ve bu tamamen normal. Uygulamalar, nefes egzersizleri veya çevrimiçi rehberlik gerçekten yardımcı olabilir. Bunu yalnız yapmak zorunda değilsiniz."
+    },
+    "4": {
+      "titel": "Daha fazla destek mevcut",
+      "advies": "Bir profesyonelle (aile hekimi veya koç) görüşmeyi düşünün.",
+      "lizzBoodschap": "Sizi duyuyorum ve gerçekten yardımcı olabilecek birine ulaşmanızı teşvik etmek istiyorum. Aile hekiminizle veya bir koçla yapacağınız görüşme büyük fark yaratabilir. Yalnız değilsiniz. 💛"
+    }
+  },
+  "vangnet": "Kendinizi anında güvensiz hissediyorsanız veya kendinize zarar verme düşünceleriniz varsa, lütfen hemen aile hekiminizle veya nöbetçi doktorla iletişime geçin. Acil durumda: 112'yi arayın (Hollanda acil numarası).",
+  "dashboard": {
+    "titel": "Pano",
+    "leeg": "Henüz kontrol kaydedilmedi.",
+    "naam": "Ad",
+    "moment": "Zaman",
+    "niveau": "Seviye",
+    "signaal": "Sinyal",
+    "tijdstip": "Saat"
+  },
+  "momenten": {
+    "inschrijving": "Kayıt sırasında",
+    "6_maanden": "6 ay",
+    "12_maanden": "12 ay"
+  },
+  "taalKiezer": "Dil seçin"
+}

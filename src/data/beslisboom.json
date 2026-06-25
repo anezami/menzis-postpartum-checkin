@@ -1,0 +1,30 @@
+{
+  "id": "postpartum-checkin-v1",
+  "titel": "Korte mentale check-in",
+  "intro": "Je hebt onlangs een baby gehad. Hoe gaat het met jou? Denk hierbij aan de afgelopen 7 dagen.",
+  "momenten": ["inschrijving", "6_maanden", "12_maanden"],
+  "scoring": "max",
+  "vragen": [
+    { "id": "stemming", "tekst": "Hoe voel je je de laatste week over het algemeen?", "type": "enkelvoudige_keuze", "opties": [
+      { "waarde": 1, "label": "Goed / in balans" },
+      { "waarde": 2, "label": "Oké, met wat mindere momenten" },
+      { "waarde": 3, "label": "Regelmatig somber of gespannen" },
+      { "waarde": 4, "label": "Vaak niet zo goed" } ] },
+    { "id": "genieten", "tekst": "Lukt het je om van kleine dingen te genieten of even te ontspannen?", "type": "enkelvoudige_keuze", "opties": [
+      { "waarde": 1, "label": "Ja, meestal wel" },
+      { "waarde": 2, "label": "Soms, maar minder dan normaal" },
+      { "waarde": 3, "label": "Niet zo vaak" },
+      { "waarde": 4, "label": "Nauwelijks" } ] },
+    { "id": "ondersteuning", "tekst": "Heb je behoefte aan extra ondersteuning of tips om je beter te voelen?", "type": "enkelvoudige_keuze", "opties": [
+      { "waarde": 1, "label": "Nee, het gaat goed zo" },
+      { "waarde": 2, "label": "Misschien wat inspiratie of informatie" },
+      { "waarde": 3, "label": "Ja, ik kan wel hulp bij zelfzorg gebruiken" },
+      { "waarde": 4, "label": "Ja, ik zoek meer gerichte ondersteuning" } ] }
+  ],
+  "uitkomsten": [
+    { "niveau": 1, "kleur": "groen",  "titel": "Het gaat goed", "advies": "Blijf doen wat werkt 😊", "signaal": "geen_signaal" },
+    { "niveau": 2, "kleur": "geel",   "titel": "Behoefte aan info of inspiratie", "advies": "Denk aan artikelen, podcasts of praktische tips.", "signaal": "content_aanbod" },
+    { "niveau": 3, "kleur": "oranje", "titel": "Digitale zelfzorg past bij jou", "advies": "Bijvoorbeeld apps, oefeningen (ademhaling, rustmomenten) of online begeleiding.", "signaal": "digitale_zelfzorg" },
+    { "niveau": 4, "kleur": "rood",   "titel": "Meer ondersteuning gewenst", "advies": "Overweeg een gesprek met een professional (huisarts of coach).", "signaal": "professional_contact" }
+  ]
+}
