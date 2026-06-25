@@ -27,11 +27,43 @@ Other demo deeplinks:
 
 - **Chat transcript**: Lizz's messages appear on one side (with a "L" avatar), user's chosen answers echoed on the other.
 - **Option chips**: 4 tappable buttons per question (WCAG AA, min 48px, visible focus ring).
-- **Free-text input**: optional text box — maps typed text to an option via substring matching; falls back gracefully to chips if no match.
-- **Back navigation**: "Vorige / Previous" link to change the last answer; score is re-evaluated correctly.
+- **Free-text input**: text box — in LLM mode, classified by the active model; in static mode, matched by keyword substring. Falls back to chips if uncertain.
+- **Back navigation**: "Vorige / Previous" link to change the last answer; tracks exact message boundaries so undo is always correct.
 - **Result delivery**: Lizz presents the outcome conversationally using the triage color card, then offers "Opnieuw / Start again" and "Naar dashboard / Go to dashboard" chips.
 - **Safety net**: For niveau 4 (rood), the vangnet block is always shown in a calm, non-alarming style.
 - **Same engine, same scoring**: uses `evalueer(getBeslisboom(), antwoorden)` — identical results to the classic flow. `registreerSignaal` is called exactly once.
+- **LLM mode (default)**: powered by **Azure AI Foundry** (`gpt-5.4-mini`) via a server-side Vite proxy — credentials never reach the browser. Falls back silently to static flow on any failure.
+
+### Zero-config quick start (Foundry, default)
+
+```bash
+az login          # authenticate once — DefaultAzureCredential picks this up
+npm run dev
+```
+
+Open: [http://localhost:5173/lizz?token=demo123&moment=inschrijving](http://localhost:5173/lizz?token=demo123&moment=inschrijving)
+
+Lizz uses **Azure AI Foundry** (`gpt-5.4-mini`) automatically. The local Node proxy acquires an Entra ID token via `DefaultAzureCredential` (scope `https://ai.azure.com/.default`) — nothing is stored or committed.
+
+### Switching to GitHub Models
+
+```bash
+cp .env.example .env
+# Edit .env and uncomment:
+#   LLM_PROVIDER=github
+#   GITHUB_TOKEN=<gh auth token output>
+npm run dev
+```
+
+### Disabling LLM (static flow only)
+
+```bash
+cp .env.example .env
+# Uncomment: VITE_LIZZ_LLM_ENABLED=false
+npm run dev
+```
+
+See `HANDOFF.md` and `.env.example` for full details.
 
 ### Supported languages + auto-detect
 

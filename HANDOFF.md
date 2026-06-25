@@ -1,96 +1,139 @@
-# Handoff — LLM-powered Lizz (for the next developer)
+# Handoff — LLM-powered Lizz (Azure AI Foundry / GitHub Models)
 
-Welcome 👋 This document explains exactly where the project stands and how to add
-the LLM (Azure AI Foundry) conversational layer. The app is a **frontend-only**
-React + TypeScript + Vite + Tailwind demonstrator. **Fictitious data only — not a
-medical device.**
+Welcome 👋 This document explains the project and how the LLM-powered Lizz works. The app is a **frontend-only** React + TypeScript + Vite + Tailwind demonstrator. **Fictitious data only — not a medical device.**
 
 ## Current state (what's already done)
 
 - ✅ Full check-in MVP: deeplink → welcome → 3 questions → color-coded outcome → dashboard.
-- ✅ **Generic, data-driven triage engine** (`src/engine/triage.ts`) — scoring strategy
-  (`"max"`) read from `src/data/beslisboom.json`. New questions/outcomes via JSON only.
-- ✅ **Lizz** conversational chat UI (`src/pages/LizzPage.tsx`, `src/components/lizz/*`)
-  — currently runs a **static scripted flow** (chips + optional free text).
-- ✅ **i18n** in 4 languages: Dutch, English, Turkish, Arabic (RTL). Auto-detect via
-  `src/i18n/taal.ts`; per-language copy in `src/data/content/{nl,en,tr,ar}.json`.
-- ✅ Tests green: `npm run test` → **112/112 passing**. `npm run build` clean.
+- ✅ **Generic, data-driven triage engine** (`src/engine/triage.ts`) — scoring strategy (`"max"`) read from `src/data/beslisboom.json`. New questions/outcomes via JSON only.
+- ✅ **Lizz** conversational chat UI (`src/pages/LizzPage.tsx`, `src/components/lizz/*`) — static scripted flow as the baseline; **LLM mode on by default** (see below).
+- ✅ **i18n** in 4 languages: Dutch, English, Turkish, Arabic (RTL). Auto-detect via `src/i18n/taal.ts`; per-language copy in `src/data/content/{nl,en,tr,ar}.json`.
+- ✅ **LLM integration** — provider-pluggable dev proxy with **Azure AI Foundry** (Entra ID, `gpt-5.4-mini`) as default; GitHub Models as alternative. Engine remains authoritative; LLM only phrases questions and classifies free-text replies.
+- ✅ Tests green: `npm run test` → **138/138 passing**. `npm run build` clean.
 
-## The one thing to build: LLM conversation
-
-Replace the *static* Lizz script with a **natural, multilingual LLM conversation**
-that still produces the same authoritative result.
+## How Lizz LLM mode works
 
 ### Golden rule — the engine stays authoritative
 
-The LLM **must not** decide the triage outcome. It only conducts the conversation and
-**elicits the 3 answers**. Map each user reply to an option `waarde` (1–4) from
-`beslisboom.json`, then compute the result with the existing engine:
+The LLM **does not** decide the triage outcome. It only:
+1. **Phrases** each of the 3 questions conversationally in the user's language.
+2. **Classifies** each free-text reply into an option `waarde` (1–4).
+
+The triage engine always computes the result:
 
 ```ts
-import { evalueer, getBeslisboom } from "./engine/triage";
-const uitkomst = evalueer(getBeslisboom(), antwoorden); // niveau + signaal + advies
+import { evalueer } from './engine/triage'
+import { getBeslisboom } from './data/profielen'
+const uitkomst = evalueer(getBeslisboom(), antwoorden) // niveau + signaal + kleur
 ```
 
-This keeps scoring deterministic, testable, and identical to the classic flow.
+If the LLM is unavailable or returns low-confidence output, Lizz **falls back silently** to the static chip flow. The demo never hard-fails.
 
-### Agreed architecture: server-side proxy (key never in the browser)
+### Architecture: server-side proxy (credentials never in the browser)
 
 ```
-Browser (Lizz UI)  ──POST /api/lizz──►  Local proxy  ──►  Azure AI Foundry
-   VITE_LIZZ_LLM_ENABLED=true            (holds the key)     (chat completions)
+Browser (Lizz UI)  ──POST /api/lizz/chat──►  Vite middleware  ──►  Azure AI Foundry (default)
+   no .env needed                            (acquires token)       gpt-5.4-mini
+                                             via DefaultAzureCredential
+                                             (az login on laptop)
 ```
 
-1. **Proxy** — a tiny endpoint that holds the secret and forwards to Foundry. Two
-   easy options:
-   - **Vite dev middleware** in `vite.config.ts` (simplest for `npm run dev`), or
-   - a small **Node/Express** server in `server/` for a production-like setup.
-   Read config from env: `FOUNDRY_ENDPOINT`, `FOUNDRY_DEPLOYMENT`,
-   `FOUNDRY_API_VERSION`, `FOUNDRY_API_KEY` (see `.env.example`).
-2. **Client** — when `VITE_LIZZ_LLM_ENABLED === "true"`, Lizz calls `/api/lizz`
-   instead of running the static script. Otherwise it uses the **static fallback**
-   (so the demo always works, even with no key / offline).
-3. **Prompting** — ground the model with the 3 questions and their option labels from
-   the active-language `content` bundle, and instruct it to: (a) reply in the user's
-   language, (b) keep a warm Menzis tone, (c) for each of the 3 topics emit the chosen
-   `waarde` (1–4) in a structured field (e.g. function/tool call or a JSON block) that
-   the client maps into `antwoorden`. Always render the niveau-4 **vangnet** (112) block.
+- **Proxy** — `vite.config.ts` registers a `configureServer` middleware plugin. It reads the active provider from `LLM_PROVIDER` (defaults to `'foundry'`), acquires a bearer token, and forwards the request.
+  - **Foundry**: uses `DefaultAzureCredential` from `@azure/identity` (scope `https://ai.azure.com/.default`). On a developer laptop this resolves via `az login`. Token is cached and refreshed 5 minutes before expiry.
+  - **GitHub**: reads `GITHUB_TOKEN` or `GITHUB_MODELS_TOKEN` from `.env`.
+  - If no credential is available → `503 {"error":"llm_not_configured"}` → UI silently activates static fallback.
+- **Provider module** — `src/llm/llmProviders.ts`: pure, zero-network functions — `resolveProviderId`, `providerConfig`, `transformBody`. Unit-tested in `src/llm/llmProviders.test.ts`.
+  - **Foundry quirk**: `max_tokens` is not accepted by `gpt-5.4-mini` — `transformBody` renames it to `max_completion_tokens` automatically.
+- **Client transport** — `src/llm/githubModels.ts`: `chat(messages, opts?)` → POST `/api/lizz/chat` → returns `choices[0].message.content`. Throws `LlmError(status)` on non-2xx so callers detect 503 → static fallback.
+- **Orchestration** — `src/llm/lizzConversation.ts`:
+  - `vraagBeurt(args)` — asks the model to rephrase the current question warmly in the user's language.
+  - `classificeerAntwoord(args)` — classifies free text into `{waarde, zekerheid, erkenning}` JSON; `zekerheid < 0.5` or parse failure → `{ onzeker: true }` → UI falls back to chips.
+- **UI** — `src/pages/LizzPage.tsx`: LLM mode is ON unless `VITE_LIZZ_LLM_ENABLED=false`. Any failure → silent static fallback with an "offline modus" note.
 
-### Setup steps
+### Laptop credential flow (zero config)
+
+```
+npm run dev
+  → Vite starts
+  → lizzProxyPlugin logs: [lizz-proxy] provider=foundry model=gpt-5.4-mini
+  → first POST to /api/lizz/chat
+  → getFoundryToken() calls DefaultAzureCredential.getToken('https://ai.azure.com/.default')
+  → resolves via az login token cache on disk
+  → bearer token forwarded to https://foundrytestjes.services.ai.azure.com/openai/v1/chat/completions
+  → response streamed back to browser
+```
+
+Nothing secret in the browser or in git. Token lives only in the Node process memory.
+
+### Quick start (default — Foundry, no .env needed)
 
 ```bash
-npm install
-cp .env.example .env          # then fill in the Foundry values
-# implement the proxy + client branch, then:
-VITE_LIZZ_LLM_ENABLED=true npm run dev
+az login          # one-time per machine
+npm run dev
+# Open: http://localhost:5173/lizz?token=demo123&moment=inschrijving
 ```
+
+### Switching to GitHub Models
+
+```bash
+cp .env.example .env
+# Edit .env — uncomment:
+#   LLM_PROVIDER=github
+#   GITHUB_TOKEN=<paste gh auth token output>
+npm run dev
+```
+
+### Disabling LLM (static chip flow only)
+
+```bash
+cp .env.example .env
+# Uncomment: VITE_LIZZ_LLM_ENABLED=false
+npm run dev
+```
+
+### Proxy error codes
+
+| Status | Meaning |
+|---|---|
+| `503 {"error":"llm_not_configured"}` | No credential available → static fallback activates |
+| `502 {"error":"upstream_failure"}` | Upstream (Foundry / GitHub Models) unreachable → static fallback activates |
+
+### Provider environment variables (all optional)
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `LLM_PROVIDER` | `foundry` | `foundry` or `github` |
+| `FOUNDRY_ENDPOINT` | `https://foundrytestjes.services.ai.azure.com/openai/v1` | Foundry base URL |
+| `FOUNDRY_DEPLOYMENT` | `gpt-5.4-mini` | Foundry deployment/model name |
+| `GITHUB_TOKEN` | — | GitHub PAT (required when `LLM_PROVIDER=github`) |
+| `GITHUB_MODELS_MODEL` | `openai/gpt-4.1-mini` | GitHub Models model name |
+| `VITE_LIZZ_LLM_ENABLED` | (enabled) | Set to `false` to force static flow |
 
 ### Guardrails / acceptance
 
-- `npm run test` stays green; add tests for the reply→`waarde` mapping.
-- Never commit `.env` or any key (`.gitignore` already blocks `.env*`).
-- LLM output is **never** trusted for the triage decision — only for the conversation
-  and answer elicitation; `evalueer()` remains the source of truth.
-- Keep the static flow working as the no-key fallback.
+- `npm run test` stays green. `npm run build` is clean.
+- `.env` is git-ignored. No secrets committed.
+- LLM output is **never** trusted for the triage decision — `evalueer()` is always the source of truth.
+- Static flow works identically when `VITE_LIZZ_LLM_ENABLED=false`.
+- `@azure/identity` is a **devDependency** — it never ships in the browser bundle.
+- `llmProviders.ts` has no Node-only imports — it's Vitest-safe.
 
-## Known issues / watch-outs (from code review)
+## Known issues / watch-outs (from code review — now fixed)
 
-- **`handleVorige` in `src/pages/LizzPage.tsx` (~line 192) slices a hardcoded 3 messages.**
-  Harmless in the static flow (data stays correct), but once the LLM injects
-  variable-length intermediate messages (clarifications, "didn't understand", etc.),
-  the back button will remove the wrong transcript entries. Make the back/undo logic
-  track message boundaries explicitly instead of assuming a fixed count per step.
+- **`handleVorige` in `src/pages/LizzPage.tsx`** — Previously sliced a hardcoded 3 messages. Now tracks `answerMsgStart` (message index before each user-antwoord) so undo removes exactly the right messages even when LLM injects variable-length intermediate messages.
 
 ## Useful entry points
 
 | What | Where |
 |------|-------|
-| Conversational UI (plug LLM in here) | `src/pages/LizzPage.tsx`, `src/components/lizz/*` |
+| Conversational UI | `src/pages/LizzPage.tsx`, `src/components/lizz/*` |
+| LLM transport (client) | `src/llm/githubModels.ts` |
+| LLM conversation orchestration | `src/llm/lizzConversation.ts` |
+| Provider abstraction (pure) | `src/llm/llmProviders.ts` |
+| Dev proxy (server, credential-holder) | `vite.config.ts` — `lizzProxyPlugin` |
 | Authoritative engine (do not bypass) | `src/engine/triage.ts`, `src/engine/types.ts` |
 | Decision tree (canonical numeric data) | `src/data/beslisboom.json` |
 | Per-language display copy | `src/data/content/{nl,en,tr,ar}.json` + `index.ts` |
 | Language detection / RTL | `src/i18n/taal.ts` |
 | Shared state + signal store | `src/context/CheckinContext.tsx` (`useCheckin`) |
 | Env template | `.env.example` |
-
-Questions about intent live in the README and inline comments. Good luck! 🚀

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useSearchParams, Link, useNavigate } from 'react-router-dom'
+import { useSearchParams, Link } from 'react-router-dom'
 import { useCheckin } from '../context/CheckinContext'
 import { getContent, uitkomstTekst, vraagTekst, optieLabel } from '../data/content'
 import { isRtl } from '../i18n/taal'
@@ -12,6 +12,7 @@ import ChatBubble from '../components/lizz/ChatBubble'
 import TypingIndicator from '../components/lizz/TypingIndicator'
 import OptionChips from '../components/lizz/OptionChips'
 import LanguageSwitcher from '../components/lizz/LanguageSwitcher'
+import { vraagBeurt, classificeerAntwoord } from '../llm/lizzConversation'
 
 // ---------------------------------------------------------------------------
 // Message type system — text is resolved at render time from current content
@@ -22,12 +23,15 @@ type LizzMsgKind =
   | { tag: 'intro' }
   | { tag: 'toestemming-prompt' }
   | { tag: 'vraag'; vraagIndex: number }
+  | { tag: 'llm-vraag'; vraagIndex: number; text: string }
   | { tag: 'tussenzin'; zinIndex: number }
+  | { tag: 'llm-erkenning'; text: string }
   | { tag: 'user-antwoord'; vraagIndex: number; waarde: number }
   | { tag: 'uitkomst'; niveau: number; kleur: string }
   | { tag: 'vangnet' }
   | { tag: 'afsluiting' }
   | { tag: 'niet-begrepen' }
+  | { tag: 'offline-note' }
 
 type LizzMsg = {
   id: string
@@ -43,7 +47,6 @@ type Phase = 'loading' | 'consent' | 'vraag' | 'typing' | 'uitkomst'
 
 export default function LizzPage() {
   const [params] = useSearchParams()
-  const navigate = useNavigate()
   const { taal, setTaal, antwoorden, setAntwoord, startSessie, registreerSignaal, reset } =
     useCheckin()
 
@@ -56,6 +59,10 @@ export default function LizzPage() {
   const rtl = isRtl(taal)
   const boom = getBeslisboom()
 
+  // LLM mode: ON by default (Foundry via az login, no .env needed).
+  // Set VITE_LIZZ_LLM_ENABLED=false in .env to force the static chip flow.
+  const llmEnabled = import.meta.env.VITE_LIZZ_LLM_ENABLED !== 'false'
+
   const [messages, setMessages] = useState<LizzMsg[]>([])
   const [phase, setPhase] = useState<Phase>('loading')
   const [vraagIndex, setVraagIndex] = useState(0)
@@ -65,14 +72,21 @@ export default function LizzPage() {
 
   const signaalRegistreerd = useRef(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
+  // Tracks the messages.length right before each user-antwoord was added.
+  // handleVorige uses this to remove the exact right messages regardless of
+  // how many intermediate messages (niet-begrepen, llm-erkenning, etc.) exist.
+  const answerMsgStart = useRef<number[]>([])
+  // Ref so async callbacks always see the live fallback state without stale closure issues.
+  const llmFallbackActivated = useRef(false)
 
   // Scroll to bottom on new messages or typing indicator
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isTyping])
 
-  // Init: call startSessie and stagger the opening chat messages (runs once on mount)
-  useEffect(() => {
+  // Stagger the opening chat messages and drive phase to 'consent'.
+  // Called on mount and by handleOpnieuw so both paths share identical behaviour.
+  function startGesprek() {
     if (showFallback) return
 
     const profiel = profielParam!
@@ -91,38 +105,52 @@ export default function LizzPage() {
       ])
       setPhase('consent')
     }, 2000)
+  }
+
+  // Init: call startSessie and stagger the opening chat messages (runs once on mount)
+  useEffect(() => {
+    startGesprek()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // Only run on mount — token/moment come from URL and won't change
 
   // ---------------------------------------------------------------------------
-  // Handlers
+  // LLM fallback activator — shows an "offline modus" note once, then falls back
   // ---------------------------------------------------------------------------
 
-  function handleConsent() {
-    setMessages((prev) => [
-      ...prev,
-      { id: 'msg-vraag-0', from: 'lizz', kind: { tag: 'vraag', vraagIndex: 0 } },
-    ])
-    setPhase('vraag')
-    setVraagIndex(0)
+  function activateLlmFallback() {
+    if (!llmFallbackActivated.current) {
+      llmFallbackActivated.current = true
+      setMessages((prev) => [
+        ...prev,
+        { id: 'msg-offline-note', from: 'lizz', kind: { tag: 'offline-note' } },
+      ])
+    }
   }
 
-  function handleAntwoord(waarde: number) {
-    if (phase !== 'vraag') return
+  // ---------------------------------------------------------------------------
+  // Core answer handler — used by both chip and LLM text paths
+  // ---------------------------------------------------------------------------
 
-    const vraag = boom.vragen[vraagIndex]
+  function submitAntwoord(waarde: number, erkenning?: string) {
+    const currentVraagIndex = vraagIndex
     const currentZinIndex = zinIndex
+    const vraag = boom.vragen[currentVraagIndex]
 
-    // Echo user's choice in the chat
-    setMessages((prev) => [
-      ...prev,
-      { id: `msg-user-${vraagIndex}`, from: 'user', kind: { tag: 'user-antwoord', vraagIndex, waarde } },
-    ])
+    // Record the message boundary before the user-antwoord is inserted.
+    // handleVorige slices back to this index for precise undo.
+    setMessages((prev) => {
+      answerMsgStart.current[currentVraagIndex] = prev.length
+      return [
+        ...prev,
+        {
+          id: `msg-user-${currentVraagIndex}`,
+          from: 'user',
+          kind: { tag: 'user-antwoord', vraagIndex: currentVraagIndex, waarde },
+        },
+      ]
+    })
 
-    // Store in context
     setAntwoord(vraag.id, waarde)
-
-    // Show typing indicator
     setIsTyping(true)
     setPhase('typing')
 
@@ -132,80 +160,217 @@ export default function LizzPage() {
       setZinIndex((prev) => prev + 1)
       setIsTyping(false)
 
-      // Add empathetic tussenzin
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `msg-tussenzin-${vraagIndex}`,
-          from: 'lizz',
-          kind: { tag: 'tussenzin', zinIndex: currentZinIndex % 3 },
-        },
-      ])
+      const ackMsg: LizzMsg = erkenning
+        ? {
+            id: `msg-llm-erk-${currentVraagIndex}`,
+            from: 'lizz',
+            kind: { tag: 'llm-erkenning', text: erkenning },
+          }
+        : {
+            id: `msg-tussenzin-${currentVraagIndex}`,
+            from: 'lizz',
+            kind: { tag: 'tussenzin', zinIndex: currentZinIndex % 3 },
+          }
 
-      if (vraagIndex < boom.vragen.length - 1) {
-        // Next question
-        const nextIdx = vraagIndex + 1
-        setMessages((prev) => [
-          ...prev,
-          { id: `msg-vraag-${nextIdx}`, from: 'lizz', kind: { tag: 'vraag', vraagIndex: nextIdx } },
-        ])
-        setVraagIndex(nextIdx)
-        setPhase('vraag')
+      if (currentVraagIndex < boom.vragen.length - 1) {
+        const nextIdx = currentVraagIndex + 1
+
+        if (llmEnabled && !llmFallbackActivated.current) {
+          // LLM mode: fetch conversational phrasing for the next question
+          setMessages((prev) => [...prev, ackMsg])
+          setIsTyping(true)
+
+          vraagBeurt({
+            vraag: boom.vragen[nextIdx],
+            vraagIndex: nextIdx,
+            totaal: boom.vragen.length,
+            naam: profielParam!.naam,
+            taal,
+            c,
+          })
+            .then((text) => {
+              setIsTyping(false)
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: `msg-llm-vraag-${nextIdx}`,
+                  from: 'lizz',
+                  kind: { tag: 'llm-vraag', vraagIndex: nextIdx, text },
+                },
+              ])
+              setVraagIndex(nextIdx)
+              setPhase('vraag')
+            })
+            .catch(() => {
+              activateLlmFallback()
+              setIsTyping(false)
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: `msg-vraag-${nextIdx}`,
+                  from: 'lizz',
+                  kind: { tag: 'vraag', vraagIndex: nextIdx },
+                },
+              ])
+              setVraagIndex(nextIdx)
+              setPhase('vraag')
+            })
+        } else {
+          // Static path
+          setMessages((prev) => [
+            ...prev,
+            ackMsg,
+            { id: `msg-vraag-${nextIdx}`, from: 'lizz', kind: { tag: 'vraag', vraagIndex: nextIdx } },
+          ])
+          setVraagIndex(nextIdx)
+          setPhase('vraag')
+        }
       } else {
-        // All questions answered — compute uitkomst
+        // All questions answered — compute uitkomst with the existing engine
         // antwoorden in context may not yet include this last answer (async React state),
         // so we manually merge it for the evaluation
         const alleAntwoorden: Antwoorden = { ...antwoorden, [vraag.id]: waarde }
         const uitkomst = evalueer(boom, alleAntwoorden)
 
-        // Register signal exactly once
         if (!signaalRegistreerd.current && profielParam && momentParam) {
           registreerSignaal(uitkomst, profielParam, momentParam)
           signaalRegistreerd.current = true
         }
 
-        setMessages((prev) => [
-          ...prev,
-          { id: 'msg-uitkomst', from: 'lizz', kind: { tag: 'uitkomst', niveau: uitkomst.niveau, kleur: uitkomst.kleur } },
-        ])
-
+        const endMessages: LizzMsg[] = [
+          ackMsg,
+          {
+            id: 'msg-uitkomst',
+            from: 'lizz',
+            kind: { tag: 'uitkomst', niveau: uitkomst.niveau, kleur: uitkomst.kleur },
+          },
+        ]
         if (uitkomst.niveau === 4) {
-          setMessages((prev) => [
-            ...prev,
-            { id: 'msg-vangnet', from: 'lizz', kind: { tag: 'vangnet' } },
-          ])
+          endMessages.push({ id: 'msg-vangnet', from: 'lizz', kind: { tag: 'vangnet' } })
         }
+        endMessages.push({ id: 'msg-afsluiting', from: 'lizz', kind: { tag: 'afsluiting' } })
 
-        setMessages((prev) => [
-          ...prev,
-          { id: 'msg-afsluiting', from: 'lizz', kind: { tag: 'afsluiting' } },
-        ])
-
+        setMessages((prev) => [...prev, ...endMessages])
         setPhase('uitkomst')
       }
     }, delay)
   }
 
-  // Go back one question: pop user-echo + tussenzin + current vraag (3 messages)
+  // ---------------------------------------------------------------------------
+  // Handlers
+  // ---------------------------------------------------------------------------
+
+  function handleConsent() {
+    if (llmEnabled && !llmFallbackActivated.current) {
+      // LLM mode: fetch conversational phrasing for vraag 0
+      setIsTyping(true)
+      setPhase('typing')
+
+      vraagBeurt({
+        vraag: boom.vragen[0],
+        vraagIndex: 0,
+        totaal: boom.vragen.length,
+        naam: profielParam!.naam,
+        taal,
+        c,
+      })
+        .then((text) => {
+          setIsTyping(false)
+          setMessages((prev) => [
+            ...prev,
+            { id: 'msg-llm-vraag-0', from: 'lizz', kind: { tag: 'llm-vraag', vraagIndex: 0, text } },
+          ])
+          setVraagIndex(0)
+          setPhase('vraag')
+        })
+        .catch(() => {
+          activateLlmFallback()
+          setIsTyping(false)
+          setMessages((prev) => [
+            ...prev,
+            { id: 'msg-vraag-0', from: 'lizz', kind: { tag: 'vraag', vraagIndex: 0 } },
+          ])
+          setVraagIndex(0)
+          setPhase('vraag')
+        })
+    } else {
+      // Static path
+      setMessages((prev) => [
+        ...prev,
+        { id: 'msg-vraag-0', from: 'lizz', kind: { tag: 'vraag', vraagIndex: 0 } },
+      ])
+      setPhase('vraag')
+      setVraagIndex(0)
+    }
+  }
+
+  function handleAntwoord(waarde: number) {
+    if (phase !== 'vraag') return
+    submitAntwoord(waarde)
+  }
+
+  // Go back one question: remove all messages from when the previous answer was submitted,
+  // so the previous question bubble remains visible and the user can re-answer.
   function handleVorige() {
     if (vraagIndex === 0 || phase !== 'vraag') return
-    setMessages((prev) => prev.slice(0, -3))
+    const cutPoint = answerMsgStart.current[vraagIndex - 1] ?? 0
+    setMessages((prev) => prev.slice(0, cutPoint))
     setVraagIndex((prev) => prev - 1)
     setPhase('vraag')
   }
 
-  // Free-text input: try to match typed text to an option via substring matching
+  // Free-text input handler
   function handleTextSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (phase !== 'vraag' || !textInput.trim()) return
+    if ((phase !== 'vraag' && phase !== 'typing') || !textInput.trim()) return
 
-    const normalized = textInput.trim().toLowerCase()
+    const text = textInput.trim()
+    setTextInput('')
+
+    if (llmEnabled && !llmFallbackActivated.current) {
+      // LLM path: classify free text into a waarde
+      setIsTyping(true)
+      setPhase('typing')
+
+      classificeerAntwoord({
+        userText: text,
+        vraag: boom.vragen[vraagIndex],
+        taal,
+        c,
+      })
+        .then((result) => {
+          setIsTyping(false)
+          if (result.onzeker) {
+            // Show a "didn't understand" message and keep chips
+            setMessages((prev) => [
+              ...prev,
+              { id: `msg-niet-begrepen-${Date.now()}`, from: 'lizz', kind: { tag: 'niet-begrepen' } },
+            ])
+            setPhase('vraag')
+          } else {
+            // Confident classification — echo it and advance
+            submitAntwoord(result.waarde, result.erkenning)
+          }
+        })
+        .catch(() => {
+          activateLlmFallback()
+          setIsTyping(false)
+          setPhase('vraag')
+          // Fall through to static substring matching
+          handleTextMatchStatic(text)
+        })
+    } else {
+      handleTextMatchStatic(text)
+    }
+  }
+
+  function handleTextMatchStatic(text: string) {
+    const normalized = text.toLowerCase()
     const vraag = boom.vragen[vraagIndex]
     let matchedWaarde: number | null = null
 
     for (const optie of vraag.opties) {
       const label = optieLabel(c, vraag.id, optie.waarde).toLowerCase()
-      // Match if typed text contains the first meaningful word of the label or vice versa
       const firstWord = label.split(/\s/)[0]
       if (
         label.includes(normalized) ||
@@ -218,10 +383,8 @@ export default function LizzPage() {
     }
 
     if (matchedWaarde !== null) {
-      setTextInput('')
-      handleAntwoord(matchedWaarde)
+      submitAntwoord(matchedWaarde)
     } else {
-      setTextInput('')
       setMessages((prev) => [
         ...prev,
         { id: `msg-niet-begrepen-${Date.now()}`, from: 'lizz', kind: { tag: 'niet-begrepen' } },
@@ -229,16 +392,17 @@ export default function LizzPage() {
     }
   }
 
-  // Reset and start fresh
+  // Reset and start fresh (preserves current token/moment — no navigation needed)
   function handleOpnieuw() {
     reset()
     signaalRegistreerd.current = false
+    answerMsgStart.current = []
+    llmFallbackActivated.current = false
     setMessages([])
-    setPhase('loading')
     setVraagIndex(0)
     setZinIndex(0)
     setTextInput('')
-    navigate('/lizz?token=demo123&moment=inschrijving', { replace: true })
+    startGesprek()
   }
 
   // ---------------------------------------------------------------------------
@@ -272,8 +436,24 @@ export default function LizzPage() {
         )
       }
 
+      case 'llm-vraag': {
+        return (
+          <div>
+            <p className="mb-1 text-xs text-menzis-inkt/50 font-medium">
+              {c.lizz.voortgang
+                .replace('{huidig}', String(kind.vraagIndex + 1))
+                .replace('{totaal}', String(boom.vragen.length))}
+            </p>
+            <p>{kind.text}</p>
+          </div>
+        )
+      }
+
       case 'tussenzin':
         return c.lizz.tussenzinnen[kind.zinIndex % 3]
+
+      case 'llm-erkenning':
+        return kind.text
 
       case 'user-antwoord': {
         const v = boom.vragen[kind.vraagIndex]
@@ -307,6 +487,11 @@ export default function LizzPage() {
 
       case 'niet-begrepen':
         return c.lizz.nietBegrepen
+
+      case 'offline-note':
+        return (
+          <span className="text-xs text-menzis-inkt/40 italic">offline modus</span>
+        )
 
       default:
         return null
@@ -504,4 +689,4 @@ export default function LizzPage() {
       )}
     </div>
   )
-}
+}
