@@ -73,6 +73,14 @@ VITE_LIZZ_LLM_ENABLED=true npm run dev
   and answer elicitation; `evalueer()` remains the source of truth.
 - Keep the static flow working as the no-key fallback.
 
+## Known issues / watch-outs (from code review)
+
+- **`handleVorige` in `src/pages/LizzPage.tsx` (~line 192) slices a hardcoded 3 messages.**
+  Harmless in the static flow (data stays correct), but once the LLM injects
+  variable-length intermediate messages (clarifications, "didn't understand", etc.),
+  the back button will remove the wrong transcript entries. Make the back/undo logic
+  track message boundaries explicitly instead of assuming a fixed count per step.
+
 ## Useful entry points
 
 | What | Where |
