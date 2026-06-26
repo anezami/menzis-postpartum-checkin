@@ -9,7 +9,8 @@ Welcome 👋 This document explains the project and how the LLM-powered Lizz wor
 - ✅ **Lizz** conversational chat UI (`src/pages/LizzPage.tsx`, `src/components/lizz/*`) — static scripted flow as the baseline; **LLM mode on by default** (see below).
 - ✅ **i18n** in 4 languages: Dutch, English, Turkish, Arabic (RTL). Auto-detect via `src/i18n/taal.ts`; per-language copy in `src/data/content/{nl,en,tr,ar}.json`.
 - ✅ **LLM integration** — provider-pluggable dev proxy with **Azure AI Foundry** (Entra ID, `gpt-5.4-mini`) as default; GitHub Models as alternative. Engine remains authoritative; LLM only phrases questions and classifies free-text replies.
-- ✅ Tests green: `npm run test` → **138/138 passing**. `npm run build` clean.
+- ✅ **Voice infrastructure** — Azure AI Speech TTS Avatar (WebRTC) + Speech-to-Text. Transport modules in `src/speech/*`; dev proxy endpoint `GET /api/lizz/avatar-token` (keyless Entra). Degrades to text-only on 503.
+- ✅ Tests green: `npm run test` → **148/148 passing**. `npm run build` clean.
 
 ## How Lizz LLM mode works
 
@@ -137,3 +138,52 @@ npm run dev
 | Language detection / RTL | `src/i18n/taal.ts` |
 | Shared state + signal store | `src/context/CheckinContext.tsx` (`useCheckin`) |
 | Env template | `.env.example` |
+
+## Voice: talking avatar + speech-to-text
+
+### Architecture: keyless Entra avatar relay flow + STT
+
+```
+Browser (Lizz UI)
+  │
+  ├─GET /api/lizz/avatar-token─► Vite middleware (Node)
+  │                                 │ DefaultAzureCredential
+  │                                 │ getToken('https://cognitiveservices.azure.com/.default')
+  │                                 │ authValue = aad#<resourceId>#<aadToken>
+  │                                 │ GET relay/token/v1 → { Urls, Username, Password }
+  │◄── { authToken, region, iceServers } ─────────────────────────────────────
+  │
+  ├─avatarClient.ts: RTCPeerConnection({ iceServers })
+  │   AvatarSynthesizer.startAvatarAsync(pc)
+  │   speak(text, voice) → speakSsmlAsync(<speak><voice name='...'/>)
+  │
+  └─speechToText.ts: SpeechRecognizer.recognizeOnceAsync()
+      mic → Azure STT → resolved text string
+```
+
+**The engine stays authoritative** — voice is purely a presentation layer. The LLM classifies the transcript exactly as it would a typed reply.
+
+### Key facts
+
+- Resource: `foundrytestjes` (AIServices, region `swedencentral`, `disableLocalAuth: true` — Entra only, no keys).
+- `authValue` format: `aad#<resourceId>#<aadToken>` — used as both `SpeechConfig.fromAuthorizationToken` value AND the `Authorization: Bearer` header for the relay token fetch.
+- ICE relay endpoint: `https://{region}.tts.speech.microsoft.com/cognitiveservices/avatar/relay/token/v1` → `{ Urls, Username, Password }`.
+- SSML is used for per-utterance voice/locale control: `<speak version="1.0"...><voice name="{voice}">{text}</voice></speak>`.
+- The raw AAD token is never logged or committed; the proxy only emits a truncated error string on failure.
+
+### New files
+
+| File | Purpose |
+|---|---|
+| `src/speech/speechConfig.ts` | Pure constants (`AVATAR_CHARACTER`, `AVATAR_STYLE`) + `sttLocale()` + `ttsVoice()` |
+| `src/speech/speechToken.ts` | `getSpeechToken()` — shared fetch helper for `/api/lizz/avatar-token`; `SpeechNotConfiguredError` |
+| `src/speech/avatarClient.ts` | `startAvatarSession()` — WebRTC + `AvatarSynthesizer`; returns `AvatarSession { speak, stop }` |
+| `src/speech/speechToText.ts` | `recognizeOnce(locale)` — mic STT; `sttAvailable()` guard |
+| `src/speech/speechConfig.test.ts` | 12 Vitest unit tests for locale/voice maps + constants |
+
+### Proxy environment variables
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `SPEECH_REGION` | `swedencentral` | Azure Speech region |
+| `SPEECH_RESOURCE_ID` | _(foundrytestjes resourceId)_ | Cognitive Services resourceId for `aad#` auth |

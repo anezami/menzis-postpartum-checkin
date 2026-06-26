@@ -30,6 +30,25 @@ async function getFoundryToken(): Promise<string | null> {
 }
 
 // ---------------------------------------------------------------------------
+// Speech token cache — separate credential + cache for Cognitive Services.
+// Refreshed 5 min before expiry. Used by both TTS Avatar and STT endpoints.
+// ---------------------------------------------------------------------------
+
+let speechCredential: DefaultAzureCredential | null = null
+let cachedSpeechToken: AccessToken | null = null
+
+async function getSpeechAadToken(): Promise<string> {
+  if (!speechCredential) speechCredential = new DefaultAzureCredential()
+  if (
+    !cachedSpeechToken ||
+    cachedSpeechToken.expiresOnTimestamp - Date.now() < 5 * 60 * 1000
+  ) {
+    cachedSpeechToken = await speechCredential.getToken('https://cognitiveservices.azure.com/.default')
+  }
+  return cachedSpeechToken.token
+}
+
+// ---------------------------------------------------------------------------
 // Dev-only proxy: forwards POST /api/lizz/chat to the configured LLM provider.
 // Credentials are resolved here in Node and NEVER reach the browser.
 // ---------------------------------------------------------------------------
@@ -43,6 +62,65 @@ function lizzProxyPlugin(): Plugin {
       const { endpoint, model } = providerConfig(providerId, env)
 
       console.log(`[lizz-proxy] provider=${providerId} model=${model}`)
+
+      // ── GET /api/lizz/avatar-token ───────────────────────────────────────
+      // Returns AAD auth value + ICE relay token for the Azure TTS Avatar.
+      // All credentials are resolved server-side; nothing secret reaches the browser.
+      server.middlewares.use('/api/lizz/avatar-token', (req: IncomingMessage, res: ServerResponse): void => {
+        void (async () => {
+          if (req.method !== 'GET') {
+            res.statusCode = 405
+            res.end()
+            return
+          }
+
+          const region = process.env.SPEECH_REGION ?? 'swedencentral'
+          const resourceId =
+            process.env.SPEECH_RESOURCE_ID ??
+            '/subscriptions/fb5cf409-7bc6-4446-aea6-d49b899eaa8b/resourceGroups/foundrytests/providers/Microsoft.CognitiveServices/accounts/foundrytestjes'
+
+          let aadToken: string
+          try {
+            aadToken = await getSpeechAadToken()
+          } catch (err) {
+            console.error('[lizz-proxy] speech AAD token error:', String(err).slice(0, 120))
+            res.statusCode = 503
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ error: 'speech_not_configured', detail: 'AAD token unavailable — run: az login' }))
+            return
+          }
+
+          const authValue = `aad#${resourceId}#${aadToken}`
+
+          let iceServers: { urls: string | string[]; username: string; credential: string }[]
+          try {
+            const relayRes = await fetch(
+              `https://${region}.tts.speech.microsoft.com/cognitiveservices/avatar/relay/token/v1`,
+              { headers: { Authorization: `Bearer ${authValue}` } },
+            )
+            if (!relayRes.ok) {
+              const detail = `relay HTTP ${relayRes.status}`
+              console.error('[lizz-proxy] avatar relay token error:', detail)
+              res.statusCode = 503
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ error: 'speech_not_configured', detail }))
+              return
+            }
+            const relay = await relayRes.json() as { Urls: string | string[]; Username: string; Password: string }
+            iceServers = [{ urls: relay.Urls, username: relay.Username, credential: relay.Password }]
+          } catch (err) {
+            console.error('[lizz-proxy] avatar relay fetch error:', String(err).slice(0, 120))
+            res.statusCode = 503
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ error: 'speech_not_configured', detail: 'relay fetch failed' }))
+            return
+          }
+
+          res.statusCode = 200
+          res.setHeader('Content-Type', 'application/json')
+          res.end(JSON.stringify({ authToken: authValue, region, iceServers }))
+        })()
+      })
 
       server.middlewares.use('/api/lizz/chat', (req: IncomingMessage, res: ServerResponse): void => {
         void (async () => {

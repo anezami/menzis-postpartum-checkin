@@ -25,7 +25,12 @@
     "onbekendToken": "لم نتمكن من العثور على ملفك الشخصي. اختر ملفاً تجريبياً للمتابعة.",
     "invoerPlaceholder": "اكتبي هنا…",
     "verzend": "إرسال",
-    "klassiekToggle": "النسخة الكلاسيكية"
+    "klassiekToggle": "النسخة الكلاسيكية",
+    "avatarAanLabel": "تفعيل صوت الصورة الرمزية",
+    "avatarUitLabel": "إيقاف صوت الصورة الرمزية",
+    "micLabel": "تحدثي بإجابتك",
+    "luistert": "أستمع…",
+    "avatarNietBeschikbaar": "الصورة الرمزية الصوتية غير متاحة"
   },
   "vragen": {
     "stemming": {

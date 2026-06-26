@@ -25,7 +25,12 @@
     "onbekendToken": "We couldn't find your profile. Choose a demo profile to continue.",
     "invoerPlaceholder": "Type here…",
     "verzend": "Send",
-    "klassiekToggle": "Classic version"
+    "klassiekToggle": "Classic version",
+    "avatarAanLabel": "Enable avatar voice",
+    "avatarUitLabel": "Disable avatar voice",
+    "micLabel": "Speak your answer",
+    "luistert": "Listening…",
+    "avatarNietBeschikbaar": "Voice avatar unavailable"
   },
   "vragen": {
     "stemming": {

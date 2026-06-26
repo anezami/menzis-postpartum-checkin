@@ -46,6 +46,16 @@ export type Content = {
     verzend: string
     /** Toggle label to switch to the classic flow */
     klassiekToggle: string
+    /** Aria-label for the speaker/avatar-voice enable button */
+    avatarAanLabel: string
+    /** Aria-label for the speaker/avatar-voice disable button */
+    avatarUitLabel: string
+    /** Aria-label for the microphone (STT) button */
+    micLabel: string
+    /** Aria-live announcement while STT is actively listening */
+    luistert: string
+    /** Brief note shown when the avatar session cannot be started */
+    avatarNietBeschikbaar: string
   }
   /** Keyed by the vraag.id from beslisboom.json */
   vragen: Record<string, VraagContent>

@@ -33,6 +33,27 @@ Other demo deeplinks:
 - **Safety net**: For niveau 4 (rood), the vangnet block is always shown in a calm, non-alarming style.
 - **Same engine, same scoring**: uses `evalueer(getBeslisboom(), antwoorden)` — identical results to the classic flow. `registreerSignaal` is called exactly once.
 - **LLM mode (default)**: powered by **Azure AI Foundry** (`gpt-5.4-mini`) via a server-side Vite proxy — credentials never reach the browser. Falls back silently to static flow on any failure.
+- **Talking avatar + voice input**: Azure AI Speech TTS Avatar (Lizz/lisa, casual-sitting) speaks each question aloud; a microphone button lets the user reply by voice (STT). Both degrade gracefully to text-only when the Speech resource is unavailable.
+
+### Voice: talking avatar + speech-to-text
+
+Lizz can speak via the **Azure AI Speech TTS Avatar** and listen via **Speech-to-Text**, both backed by the same `foundrytestjes` Cognitive Services resource (keyless Entra auth).
+
+```bash
+az login    # one-time — DefaultAzureCredential picks this up
+npm run dev
+```
+
+The dev proxy (`GET /api/lizz/avatar-token`) mints an `aad#<resourceId>#<aadToken>` auth value and fetches an ICE relay token from the Speech relay service. Both are returned to the client as `{ authToken, region, iceServers }` — the raw AAD token is never logged or stored.
+
+| Module | Purpose |
+|---|---|
+| `src/speech/speechConfig.ts` | Pure constants + locale/voice maps (unit-testable, no SDK) |
+| `src/speech/speechToken.ts` | Shared `getSpeechToken()` helper — calls `/api/lizz/avatar-token` |
+| `src/speech/avatarClient.ts` | `startAvatarSession()` — WebRTC + AvatarSynthesizer; `speak(text,voice)` via SSML |
+| `src/speech/speechToText.ts` | `recognizeOnce(locale)` — SpeechRecognizer + mic; `sttAvailable()` guard |
+
+Voice degrades gracefully: if `/api/lizz/avatar-token` returns 503, the avatar hides and the user types as usual.
 
 ### Zero-config quick start (Foundry, default)
 

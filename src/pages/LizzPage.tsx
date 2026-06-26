@@ -13,6 +13,9 @@ import TypingIndicator from '../components/lizz/TypingIndicator'
 import OptionChips from '../components/lizz/OptionChips'
 import LanguageSwitcher from '../components/lizz/LanguageSwitcher'
 import { vraagBeurt, classificeerAntwoord } from '../llm/lizzConversation'
+import { startAvatarSession, type AvatarSession } from '../speech/avatarClient'
+import { ttsVoice, sttLocale } from '../speech/speechConfig'
+import { sttAvailable, recognizeOnce } from '../speech/speechToText'
 
 // ---------------------------------------------------------------------------
 // Message type system — text is resolved at render time from current content
@@ -79,10 +82,85 @@ export default function LizzPage() {
   // Ref so async callbacks always see the live fallback state without stale closure issues.
   const llmFallbackActivated = useRef(false)
 
+  // ─── Voice / avatar refs and state ─────────────────────────────────────────
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const audioRef = useRef<HTMLAudioElement>(null)
+  const avatarSessionRef = useRef<AvatarSession | null>(null)
+  /** Set of message ids already dispatched to the avatar for TTS — reset on opnieuw */
+  const spokenMsgIds = useRef<Set<string>>(new Set())
+  const speakChain = useRef<Promise<void>>(Promise.resolve())
+
+  const [avatarUnavailable, setAvatarUnavailable] = useState(false)
+  const [speakerEnabled, setSpeakerEnabled] = useState(true)
+  const [avatarCollapsed, setAvatarCollapsed] = useState(false)
+  const [videoActive, setVideoActive] = useState(false)
+  const [listening, setListening] = useState(false)
+
   // Scroll to bottom on new messages or typing indicator
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isTyping])
+
+  // Avatar session — initialise once on mount when a real profile is available.
+  // If the SDK / proxy is unreachable we set avatarUnavailable and the chat continues normally.
+  useEffect(() => {
+    if (showFallback) return
+    if (!videoRef.current || !audioRef.current) return
+
+    let cancelled = false
+    startAvatarSession({
+      videoEl: videoRef.current,
+      audioEl: audioRef.current,
+      voice: ttsVoice(taal),
+    })
+      .then((session) => {
+        if (!cancelled) avatarSessionRef.current = session
+      })
+      .catch(() => {
+        if (!cancelled) setAvatarUnavailable(true)
+      })
+
+    return () => {
+      cancelled = true
+      // Unmount: stop the session if it was started
+      avatarSessionRef.current?.stop().catch(() => {})
+      avatarSessionRef.current = null
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Run once on mount — profile / taal won't change after initial load
+
+  // Speak every new Lizz message through the avatar.
+  // Advances spokenMsgIds regardless of speakerEnabled so toggling on never replays history.
+  useEffect(() => {
+    const session = avatarSessionRef.current
+    if (!session || avatarUnavailable) return
+
+    const unspoken = messages.filter(
+      (m) => m.from === 'lizz' && !spokenMsgIds.current.has(m.id),
+    )
+    if (unspoken.length === 0) return
+
+    // Advance pointer unconditionally
+    for (const m of unspoken) spokenMsgIds.current.add(m.id)
+
+    if (!speakerEnabled) return
+
+    const voice = ttsVoice(taal)
+    const toSpeak = unspoken
+    speakChain.current = speakChain.current.then(async () => {
+      for (const msg of toSpeak) {
+        const text = spokenText(msg)
+        if (!text) continue
+        try {
+          await session.speak(text, voice)
+        } catch {
+          setAvatarUnavailable(true)
+          return
+        }
+      }
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages]) // speakerEnabled intentionally read via closure — no history replay on toggle
 
   // Stagger the opening chat messages and drive phase to 'consent'.
   // Called on mount and by handleOpnieuw so both paths share identical behaviour.
@@ -319,13 +397,11 @@ export default function LizzPage() {
     setPhase('vraag')
   }
 
-  // Free-text input handler
-  function handleTextSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if ((phase !== 'vraag' && phase !== 'typing') || !textInput.trim()) return
-
-    const text = textInput.trim()
-    setTextInput('')
+  // Shared submit path — used by both typed text and STT voice input.
+  // ALL user answers (chip, typed, spoken) flow through submitAntwoord via this function.
+  function submitUserText(text: string) {
+    if ((phase !== 'vraag' && phase !== 'typing') || !text.trim()) return
+    const trimmed = text.trim()
 
     if (llmEnabled && !llmFallbackActivated.current) {
       // LLM path: classify free text into a waarde
@@ -333,7 +409,7 @@ export default function LizzPage() {
       setPhase('typing')
 
       classificeerAntwoord({
-        userText: text,
+        userText: trimmed,
         vraag: boom.vragen[vraagIndex],
         taal,
         c,
@@ -357,11 +433,20 @@ export default function LizzPage() {
           setIsTyping(false)
           setPhase('vraag')
           // Fall through to static substring matching
-          handleTextMatchStatic(text)
+          handleTextMatchStatic(trimmed)
         })
     } else {
-      handleTextMatchStatic(text)
+      handleTextMatchStatic(trimmed)
     }
+  }
+
+  // Free-text input handler
+  function handleTextSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    const trimmed = textInput.trim()
+    if (!trimmed) return
+    setTextInput('')
+    submitUserText(trimmed)
   }
 
   function handleTextMatchStatic(text: string) {
@@ -392,17 +477,75 @@ export default function LizzPage() {
     }
   }
 
+  // Microphone / STT handler — result routed through submitUserText (same engine path as typing)
+  function handleMicClick() {
+    if (!sttAvailable() || listening || phase === 'typing') return
+    setListening(true)
+    void recognizeOnce(sttLocale(taal))
+      .then((text) => {
+        setListening(false)
+        if (text.trim()) submitUserText(text.trim())
+      })
+      .catch(() => {
+        setListening(false)
+      })
+  }
+
   // Reset and start fresh (preserves current token/moment — no navigation needed)
   function handleOpnieuw() {
     reset()
     signaalRegistreerd.current = false
     answerMsgStart.current = []
     llmFallbackActivated.current = false
+    spokenMsgIds.current = new Set() // reset spoken pointer so new greeting is spoken
+    speakChain.current = Promise.resolve()
     setMessages([])
     setVraagIndex(0)
     setZinIndex(0)
     setTextInput('')
     startGesprek()
+  }
+
+  // ---------------------------------------------------------------------------
+  // Plain-text resolver for TTS — mirrors renderMsgContent but returns strings.
+  // Returns null for messages that should not be spoken (user bubbles, offline note).
+  // ---------------------------------------------------------------------------
+
+  function spokenText(msg: LizzMsg): string | null {
+    const { kind } = msg
+    switch (kind.tag) {
+      case 'begroeting':
+        return c.lizz.begroeting.replace('{naam}', kind.naam)
+      case 'intro':
+        return c.lizz.intro
+      case 'toestemming-prompt':
+        return c.lizz.toestemming
+      case 'vraag':
+        // Spoken text = question only, no "Vraag 1 van 3" prefix
+        return vraagTekst(c, boom.vragen[kind.vraagIndex].id)
+      case 'llm-vraag':
+        return kind.text
+      case 'tussenzin':
+        return c.lizz.tussenzinnen[kind.zinIndex % 3]
+      case 'llm-erkenning':
+        return kind.text
+      case 'uitkomst': {
+        const uc = uitkomstTekst(c, kind.niveau)
+        return `${uc.titel}. ${uc.lizzBoodschap} ${uc.advies}`
+      }
+      case 'vangnet':
+        return c.vangnet
+      case 'afsluiting':
+        return c.lizz.afsluiting
+      case 'niet-begrepen':
+        return c.lizz.nietBegrepen
+      case 'user-antwoord':
+        return null
+      case 'offline-note':
+        return null
+      default:
+        return null
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -576,7 +719,69 @@ export default function LizzPage() {
         </div>
       </header>
 
-      {/* Chat transcript */}
+        {/* Avatar video panel — visible when SDK is available */}
+        {!avatarUnavailable && (
+          <section aria-label={c.lizz.naamLabel} className="max-w-lg mx-auto w-full px-4 pt-3">
+            <div className="rounded-3xl shadow-md overflow-hidden bg-white">
+              {/* Panel controls: collapse toggle + speaker toggle */}
+              <div className="flex items-center justify-between px-4 py-2">
+                <button
+                  type="button"
+                  onClick={() => setAvatarCollapsed((v) => !v)}
+                  aria-expanded={!avatarCollapsed}
+                  aria-controls="avatar-video-panel"
+                  className="text-sm font-semibold text-menzis-inkt/60 hover:text-menzis-inkt flex items-center gap-1 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-menzis-geel rounded px-1 py-1"
+                >
+                  <span>{c.lizz.naamLabel}</span>
+                  <span aria-hidden="true">{avatarCollapsed ? '▾' : '▴'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSpeakerEnabled((v) => !v)}
+                  aria-label={speakerEnabled ? c.lizz.avatarUitLabel : c.lizz.avatarAanLabel}
+                  aria-pressed={speakerEnabled}
+                  className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-full hover:bg-menzis-zacht transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-menzis-geel text-xl"
+                >
+                  {speakerEnabled ? '🔊' : '🔇'}
+                </button>
+              </div>
+
+              {/* Video area — height collapses to 0 when toggled, element stays in DOM */}
+              <div
+                id="avatar-video-panel"
+                className={`relative bg-menzis-zacht overflow-hidden transition-all duration-300 ${avatarCollapsed ? 'h-0' : 'aspect-video'}`}
+              >
+                {/* Placeholder shown until video stream becomes active */}
+                <div
+                  className={`absolute inset-0 flex flex-col items-center justify-center gap-2 pointer-events-none transition-opacity ${videoActive ? 'opacity-0' : 'opacity-100'}`}
+                >
+                  <LizzAvatar size="lg" />
+                  <span className="text-menzis-inkt/60 text-sm font-medium">{c.lizz.naamLabel}</span>
+                </div>
+                <video
+                  ref={videoRef}
+                  className="w-full h-full object-cover"
+                  muted
+                  autoPlay
+                  playsInline
+                  onPlay={() => setVideoActive(true)}
+                  onPause={() => setVideoActive(false)}
+                  aria-hidden="true"
+                />
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* Hidden audio element for avatar TTS — always in DOM so the ref is valid on mount */}
+        <audio ref={audioRef} autoPlay className="sr-only" aria-hidden="true" />
+
+        {/* Aria-live region announces STT listening state to screen readers */}
+        <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+          {listening ? c.lizz.luistert : ''}
+        </div>
+
+        {/* Chat transcript */}
       <main
         className="flex-1 overflow-y-auto px-4 py-6 max-w-lg mx-auto w-full"
         aria-live="polite"
@@ -676,6 +881,23 @@ export default function LizzPage() {
               className="flex-1 min-h-[44px] px-4 py-2 rounded-2xl border-2 border-menzis-inkt/20 bg-menzis-zacht text-menzis-inkt placeholder:text-menzis-inkt/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-menzis-geel text-base"
               aria-label={c.lizz.invoerPlaceholder}
             />
+            {/* Microphone button — only shown when browser STT is available */}
+            {sttAvailable() && (
+              <button
+                type="button"
+                onClick={handleMicClick}
+                disabled={listening}
+                aria-label={c.lizz.micLabel}
+                aria-pressed={listening}
+                className={`min-h-[44px] min-w-[44px] flex items-center justify-center rounded-full transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-menzis-geel disabled:opacity-40 ${
+                  listening
+                    ? 'bg-menzis-geel text-menzis-inkt animate-pulse'
+                    : 'bg-menzis-zacht border-2 border-menzis-inkt/20 text-menzis-inkt hover:bg-menzis-geel/30'
+                }`}
+              >
+                🎤
+              </button>
+            )}
             <button
               type="submit"
               disabled={!textInput.trim()}

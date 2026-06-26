@@ -25,7 +25,12 @@
     "onbekendToken": "Profilinizi bulamadık. Devam etmek için bir demo profili seçin.",
     "invoerPlaceholder": "Buraya yazın…",
     "verzend": "Gönder",
-    "klassiekToggle": "Klasik sürüm"
+    "klassiekToggle": "Klasik sürüm",
+    "avatarAanLabel": "Avatar sesini aç",
+    "avatarUitLabel": "Avatar sesini kapat",
+    "micLabel": "Cevabınızı söyleyin",
+    "luistert": "Dinliyorum…",
+    "avatarNietBeschikbaar": "Sesli avatar kullanılamıyor"
   },
   "vragen": {
     "stemming": {

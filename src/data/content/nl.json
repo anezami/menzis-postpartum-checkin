@@ -25,7 +25,12 @@
     "onbekendToken": "We konden jouw profiel niet vinden. Kies een demo-profiel om verder te gaan.",
     "invoerPlaceholder": "Typ hier…",
     "verzend": "Verstuur",
-    "klassiekToggle": "Klassieke versie"
+    "klassiekToggle": "Klassieke versie",
+    "avatarAanLabel": "Avatar stem inschakelen",
+    "avatarUitLabel": "Avatar stem uitschakelen",
+    "micLabel": "Spreek je antwoord in",
+    "luistert": "Ik luister…",
+    "avatarNietBeschikbaar": "Spraakavatar niet beschikbaar"
   },
   "vragen": {
     "stemming": {
